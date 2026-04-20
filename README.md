@@ -19,15 +19,81 @@ A critical secondary goal is to use this sensitivity model to predict **Seasonal
 ---
 
 ## 2. Data Acquisition & Vetting (The 2 Sources)
+
 To meet the project requirements, data was consolidated from two independent providers:
 
-1.  **Source 1 (Meteorological):** Hourly historical data retrieved via the **Meteostat API**. Key features include Temperature ($^\circ\text{C}$), Humidity (%), and Wind Speed (km/h).
-2.  **Source 2 (Grid Load):** Hourly "Actual Total Load" data from the **ENTSO-E Transparency Platform** for the Bulgaria (BG) control area.
+1. **Source 1 (Meteorological):** Hourly historical data retrieved via the **Meteostat API**. Key features include Temperature ($^\circ\text{C}$), Humidity (%), and Wind Speed (km/h).
+2. **Source 2 (Grid Load):** Hourly "Actual Total Load" data from the **ENTSO-E Transparency Platform** for the Bulgaria (BG) control area.
+
+---
 
 ### Data Vetting & Validation
+
 * **Unit Consistency:** Ensuring all timestamps are in UTC and power is measured in Megawatts (MW).
 * **Missing Values:** Identifying "NaN" entries caused by sensor failures and applying linear interpolation.
 * **Daylight Savings:** Adjusting for the 23-hour and 25-hour days in March and October to prevent timestamp misalignment.
+
+---
+
+## 2.1 Technical Data Acquisition Pipeline
+
+To ensure reproducibility and transparency, the raw data was retrieved and processed using the following technical workflow:
+
+### Grid Load (ENTSO-E)
+
+**Acquisition:**
+Data was downloaded as a series of monthly/annual CSV files from the ENTSO-E portal.
+
+**Extraction & Consolidation:**
+Files were aggregated using the Python `glob` module and `pandas`.
+
+```python
+import pandas as pd
+import glob
+
+files = glob.glob('data/energy/*.csv')
+df_energy = pd.concat([pd.read_csv(f, sep='\t') for f in files])
+```
+
+---
+
+### Meteorological Data (Meteostat)
+
+**Acquisition:**
+Raw hourly archives for Station 15614 (Sofia Airport) were retrieved via the command line for the years 2024 and 2025.
+
+**Terminal Retrieval:**
+
+```bash
+curl "https://data.meteostat.net/hourly/2024/15614.csv.gz" --output "data/weather/2024.csv.gz"
+curl "https://data.meteostat.net/hourly/2025/15614.csv.gz" --output "data/weather/2025.csv.gz"
+```
+
+**Unarchiving & Parsing:**
+The binary `.gz` archives were processed directly into memory using the `gzip` and `io` modules to ensure a low-footprint data pipeline.
+
+```python
+import glob
+import gzip
+import pandas as pd
+
+files = glob.glob('data/weather/*.csv.gz')
+
+dfs = []
+for file in files:
+    with gzip.open(file, 'rt') as f:
+        dfs.append(pd.read_csv(f, header=0))
+
+df_weather = pd.concat(dfs, ignore_index=True)
+```
+
+---
+
+### Consolidation Workflow
+
+The datasets were aligned by transforming multi-column date components (`Year`, `Month`, `Day`, `Hour`) into a standardized **ISO-8601 timestamp index**.
+
+This allowed for an **Inner Join (Mathematical Intersection)**, ensuring that only hours with both valid meteorological and electrical telemetry were preserved for modeling.
 
 ---
 
