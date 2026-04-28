@@ -1,112 +1,133 @@
 # Thermal Sensitivity of National Power Grids
 
-**Analyzing the Mathematical Relationship between Meteorological Factors and Electrical Load in Bulgaria (BG)**
+**Analyzing the Mathematical Relationship between Meteorological Factors and Electrical Load in Bulgaria (BG)**  
 
 **Author:** Aleksandar Ginev  
 **Project Type:** Technical Report / Data Science Research  
 
 ---
 
+## Abstract
+
+This research investigates the correlation between ambient temperature and electrical load within the Bulgarian (BG) power grid. Using high-resolution hourly data from the ENTSO-E Transparency Platform and Meteostat, we construct a mathematical model to quantify *Thermal Sensitivity*—defined as the change in Megawatts (MW) per degree Celsius.
+
+Results demonstrate that weather-driven factors explain a significant percentage of load volatility, providing a roadmap for strategic energy arbitrage.
+
+---
+
 ## 1. Introduction & Problem Formulation
 
-### The Problem
+Grid operators must maintain a real-time balance between supply and demand. This project quantifies the "chaos factor" introduced by meteorological variables.
 
-Electrical energy grids must maintain a perfect, real-time balance between supply and demand. Any significant deviation can lead to frequency instability or catastrophic blackouts. While industrial cycles provide a baseline, weather acts as the primary "chaos factor" that shifts consumer behavior unpredictably.
-
-### The Goal
-
-The objective of this project is to construct a mathematical model that quantifies the thermal sensitivity of the Bulgarian power grid. Specifically, we aim to calculate how a $1^\circ\text{C}$ change in ambient temperature impacts the total electrical load in Megawatts (MW).
-
-### Strategic Prediction: Seasonal Storage
-
-A critical secondary goal is to use this sensitivity model to predict seasonal energy deficits. By understanding the extra energy required during extreme winters, we calculate the capacity needed for summer energy storage (e.g., pumped-storage hydro or batteries), effectively "storing the summer sun" to ensure grid stability.
+The objective is to merge energy and weather datasets to define the *Point of Minimum Sensitivity* and model the impact of wind chill on the Bulgarian grid.
 
 ---
 
 ## 2. Data Acquisition & Vetting
 
-To meet project requirements, data was consolidated from two independent providers:
+Data was retrieved from two primary sources:
 
-- **Source 1 (Meteorological):** Hourly historical data for Sofia (Station 15614) via the Meteostat API. Features include Temperature ($^\circ\text{C}$), Humidity (%), and Wind Speed (km/h).
-- **Source 2 (Grid Load):** Hourly "Actual Total Load" data from the ENTSO-E Transparency Platform for the Bulgarian (BG) control area.
+- **ENTSO-E:** Actual Total Load (BG) – 17,544 hourly rows  
+- **Meteostat:** Hourly Meteorological Data (Sofia Station) – 17,544 hourly rows  
 
-### Data Validation Workflow
-
-- **Unit Consistency:** Synchronization of all timestamps to UTC and power measurements to Megawatts (MW).  
-- **Missing Values:** Identifying sensor failures and applying linear interpolation to maintain time-series continuity.  
-- **Temporal Alignment:** Standardizing Year/Month/Day/Hour into an ISO-8601 index to perform a mathematical inner join.
+The vetting process involved:
+- Linear Interpolation to handle missing values  
+- UTC Synchronization to ensure a perfect 1:1 hourly match between load and weather  
 
 ---
 
 ## 3. Mathematical Foundations
 
-### 3.1 Piecewise Functions (HDD & CDD)
+We utilize several mathematical tools to linearize the grid's response:
 
-Energy demand is non-linear. We use Heating Degree Days (HDD) and Cooling Degree Days (CDD) to model deviation from the base temperature ($T_b$):
-
-$$
-HDD = \max(0, T_b - T_{\text{actual}})
-$$
-
-$$
-CDD = \max(0, T_{\text{actual}} - T_b)
-$$
+- **The U-Curve:** Dividing demand into Heating, *Dead Band* (Comfort), and Cooling zones  
+- **Degree Days ($HDD$, $CDD$):** Measuring thermal deficit and surplus  
+- **Wind Chill Index ($T_{\text{wc}}$):** Accounting for convective heat loss in winter  
+- **Pearson Correlation:** Verifying statistical strength before modeling  
 
 ---
 
-### 3.2 Seasonal Storage Math
+## 4. Data Pre-processing & Consolidation
 
-To predict storage needs, we integrate the load prediction $L(T)$ over the winter period ($W$):
+A Temporal Inner Join was performed to synchronize the datasets.
+
+We engineered four key features:
+
+- **HDD/CDD:** Based on $17^\circ\text{C}$ (heating) and $22^\circ\text{C}$ (cooling) baselines  
+- **$T_{\text{wc}}$:** Wind chill–adjusted temperature  
+- **is\_weekend:** Binary feature to isolate industrial demand drops  
+
+---
+
+## 5. Exploratory Data Analysis (EDA)
+
+EDA confirmed three critical hypotheses:
+
+- **Correlation:** Features like $HDD$ show strong positive correlation with load  
+- **U-Curve Visualization:** Load rises at temperature extremes  
+- **Weekend Effect:** Industrial scheduling shifts the demand curve downward  
+
+---
+
+## 6. Modeling & Hypothesis Testing
+
+We implemented a **Multivariate 2nd-Degree Polynomial Regression** to capture non-linear thermal response.
+
+- **Target Variable:** Total Load (MW)  
+- **$R^2$ Score:** $0.4182$ (explains 41.8% of variance)  
+- **RMSE:** $708.60 \ \text{MW}$  
+
+---
+
+## 7. Predictive Strategy: Seasonal Energy Storage
+
+We integrate predicted load over the winter period:
+
+- **Total Winter Energy Deficit:** $9{,}942.48 \ \text{GWh}$  
+- **Peak Storage Requirement:** $4{,}337.07 \ \text{MW}$  
+
+This supports the use of assets like the Chaira Pumped Storage Plant to shift summer solar surplus into winter demand.
+
+---
+
+## 8. Results & Interpretation
+
+The analysis yielded a **Thermal Sensitivity ($X$)**:
 
 $$
-S_{\text{GWh}} = \frac{1}{1000} \int_{t \in W} \max\left(0, L(T_t) - G_{\text{baseline}}\right)\, dt
+X = 99.02 \ \text{MW}/^\circ\text{C}
 $$
 
-Where $G_{\text{baseline}}$ represents cheap renewable or nuclear generation capacity.
+- **Operational Impact:**  
+  A $10^\circ\text{C}$ cold snap requires:
+
+  $$
+  \Delta P = 990.20 \ \text{MW}
+  $$
+
+  This is approximately equivalent to one reactor at Kozloduy Nuclear Power Plant.
+
+- **Baseload:**  
+  The non-thermal floor was identified as:
+
+  $$
+  P_{\text{base}} = 3430.09 \ \text{MW}
+  $$
 
 ---
 
-## 4. Modeling & Feature Engineering
+## 9. Conclusion & References
 
-- **Wind Chill Index ($T_{wc}$):** Applied to winter observations to account for convective heat loss, increasing heating demand beyond raw temperature estimates.  
-- **The Weekend Effect:** A binary feature to isolate industrial demand drops and prevent schedule-driven noise from skewing the model.  
-- **Polynomial Regression:** A 2nd-degree model capturing the "U-curve" relationship where demand rises at both temperature extremes.  
+The model validates that Bulgarian grid volatility is a predictable function of weather and scheduling.
 
----
-
-## 5. Results & Interpretation
-
-### 5.1 Quantitative Results
-
-- **Thermal Sensitivity:** 99.02 MW/$^\circ\text{C}$  
-- **Baseload:** 3,430.09 MW  
-- **Operational Impact:** A 10°C cold snap creates a demand spike of:
-
-$$
-\approx 990.20 \ \text{MW}
-$$
-
-This is roughly equivalent to the output of a 1,000 MW nuclear reactor.
+Future work includes developing a population-weighted temperature index across multiple cities to refine the $99.02 \ \text{MW}/^\circ\text{C}$ sensitivity coefficient.
 
 ---
 
-### 5.2 The "Dead Band"
+## References
 
-The analysis identified a "Dead Band" between 17°C and 22°C. In this range, the grid reaches peak efficiency with minimal weather-driven load, representing an optimal window for maintenance and stable pricing.
-
----
-
-## 6. Conclusion & References
-
-### Summary
-
-The model confirms that temperature and wind chill are highly predictive of Bulgarian grid load. By quantifying the 99.02 MW/$^\circ\text{C}$ sensitivity, this research provides a roadmap for utilizing storage assets to bridge the gap between high-production summer months and high-demand winter periods.
-
----
-
-### References
-
-- ENTSO-E Transparency Platform — https://transparency.entsoe.eu/  
-- Meteostat Developers Portal — https://dev.meteostat.net/  
-- Ministry of Energy (Bulgaria) — Sustainable Energy Development Strategy  
-- ISO 8601 Standard for Date and Time Representation  
+- ENTSO-E: Load Data Portal  
+- Meteostat: Sofia Weather Station  
+- Ministry of Energy (BG): Sustainable Energy Development Strategy  
+- NIMH: Climatic Normals and Thermal Comfort Standards  
+- Pedregosa, F. et al. (2011). *Scikit-learn: Machine Learning in Python*
